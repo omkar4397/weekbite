@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+:root {
+  --background: #fbf8f3;
+  --foreground: #1f1a14;
+  --card: #ffffff;
+  --muted: #6b6258;
+  --line: #e8e1d6;
+  --brand: #d9480f;
+  --brand-soft: #fff0e6;
+  --good: #2b8a3e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #16130f;
+    --foreground: #f3ede4;
+    --card: #211d18;
+    --muted: #a89f93;
+    --line: #3a332b;
+    --brand: #ff7a3d;
+    --brand-soft: #3a2518;
+    --good: #69db7c;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
+  --color-good: var(--good);
+  --font-sans: var(--font-geist-sans);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.input {
+  @apply w-full rounded-lg border border-line bg-card px-3 py-2 outline-none focus:border-brand;
+}
+.btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2 font-medium text-white transition hover:opacity-90 disabled:opacity-50;
+}
+.btn-ghost {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg border border-line px-3 py-1.5 text-sm hover:bg-brand-soft;
+}
+.card {
+  @apply rounded-2xl border border-line bg-card;
+}
