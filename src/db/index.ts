@@ -1,24 +1,28 @@
 import "server-only";
-import { neon } from "@neondatabase/serverless";
-import { drizzle as drizzleNeon, type NeonHttpDatabase } from "drizzle-orm/neon-http";
+import postgres from "postgres";
+import { drizzle as drizzlePg, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "./schema";
 
-export type Db = NeonHttpDatabase<typeof schema>;
+export type Db = PostgresJsDatabase<typeof schema>;
 
 const globalForDb = globalThis as unknown as { __db?: Promise<Db> };
 
 /**
- * Production (Vercel): Neon Postgres via DATABASE_URL.
+ * Production (Vercel): any Postgres via DATABASE_URL (Supabase: use the
+ * transaction pooler URL, port 6543).
  * Local dev without DATABASE_URL: an embedded PGlite database in ./.pglite,
  * migrated automatically, so the app runs with zero setup.
  */
 async function createDb(): Promise<Db> {
   const url = process.env.DATABASE_URL;
   if (url) {
-    return drizzleNeon(neon(url), { schema });
+    // prepare: false is required by Supabase's transaction pooler (PgBouncer);
+    // a small pool suits short-lived serverless functions.
+    const client = postgres(url, { prepare: false, max: 5 });
+    return drizzlePg(client, { schema });
   }
   if (process.env.VERCEL) {
-    throw new Error("DATABASE_URL is not set. Add a Neon database in the Vercel dashboard.");
+    throw new Error("DATABASE_URL is not set. Add it in the Vercel project settings.");
   }
   const { PGlite } = await import("@electric-sql/pglite");
   const { drizzle } = await import("drizzle-orm/pglite");

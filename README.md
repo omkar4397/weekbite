@@ -28,7 +28,7 @@ Next.js 16 (App Router) on Vercel
 │   ├── refresh.ts          scrape sources that lack this week's offers
 │   └── digest.ts           per location/section weekly summary (cached)
 ├── src/lib/claude.ts       Claude structured outputs (menu extraction, summaries)
-└── src/db                  Drizzle schema; Neon Postgres in prod, PGlite locally
+└── src/db                  Drizzle schema; Postgres (Supabase) in prod, PGlite locally
 ```
 
 **Scheduling:** `vercel.json` runs `/api/cron/refresh` daily at 04:00 UTC (Hobby plans allow one cron
@@ -62,7 +62,7 @@ npm run try-scrapers -- "Drottninggatan 50, Stockholm"
 
 1. Push this folder to a GitHub repository.
 2. On vercel.com, **Add New → Project** and import the repo (framework: Next.js).
-3. In the project, open **Storage → Create → Neon (Postgres)** and connect it. This sets `DATABASE_URL`.
+3. Create a Postgres database (e.g. Supabase) and add its transaction-pooler connection string (port 6543) as `DATABASE_URL` in **Settings → Environment Variables**.
 4. Under **Settings → Environment Variables**, add `SESSION_SECRET`, `CRON_SECRET` and (optionally)
    `ANTHROPIC_API_KEY` and `SCRAPER_USER_AGENT`.
 5. Create the tables once, from your machine:
