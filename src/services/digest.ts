@@ -1,7 +1,7 @@
 import "server-only";
 import { and, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import type { DigestContent, Location, Section } from "@/db/schema";
+import { SECTIONS, type DigestContent, type Location, type Section } from "@/db/schema";
 import { currentWeekKey, WEEKDAYS } from "@/lib/week";
 import { isClaudeEnabled, summarizeWeek } from "@/lib/claude";
 import { dedupeOffers, type OfferView } from "@/lib/offers";
@@ -63,6 +63,22 @@ function rulesDigest(section: Section, location: Location, offers: OfferView[]):
       picks: top.map((o) => ({
         offerId: o.id,
         reason: `Save ${o.savingsSek ?? "?"} kr${o.stores.length > 1 ? ` · ${o.stores.length} stores` : ""}`,
+      })),
+      generatedBy: "rules",
+    };
+  }
+  if (section === "fastfood") {
+    const priced = offers.filter((o) => o.priceSek);
+    const cheapest = [...priced].sort((a, b) => a.priceSek! - b.priceSek!).slice(0, 4);
+    const nearest = [...offers].sort((a, b) => a.distanceM - b.distanceM).slice(0, 2);
+    const picks = [...new Map([...cheapest, ...nearest].map((o) => [o.id, o])).values()];
+    const chains = [...new Set(offers.map((o) => o.sourceName))];
+    return {
+      headline: `${offers.length} fast food deals near ${location.label}`,
+      summary: `${chains.join(", ")} ${chains.length > 1 ? "have" : "has"} ${offers.length} deal(s) this week${priced.length ? `, from ${Math.min(...priced.map((o) => o.priceSek!))} kr` : ""}. Deals are valid in every branch; the nearest branch is shown for each chain.`,
+      picks: picks.map((o) => ({
+        offerId: o.id,
+        reason: o.priceSek && cheapest.includes(o) ? `${o.priceSek} kr at ${o.sourceName}` : `${o.sourceName} is ${o.distanceM} m away`,
       })),
       generatedBy: "rules",
     };
@@ -152,7 +168,7 @@ export async function buildDigests(locationIds?: number[], budgetMs = 60_000, fo
   let built = 0;
   for (const loc of locs) {
     if (Date.now() - started > budgetMs) break;
-    for (const section of ["lunch", "grocery"] as const) {
+    for (const section of SECTIONS) {
       await getDigest(loc, section, await offersForLocation(loc, section), force);
       built++;
     }

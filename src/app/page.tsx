@@ -2,8 +2,8 @@ import Link from "next/link";
 
 const steps = [
   { icon: "📍", title: "Add your places", text: "Office, home, the gym — plus the weekdays you're usually there." },
-  { icon: "🔎", title: "We scan nearby", text: "Restaurant lunch menus and Willys/Hemköp deals around each place." },
-  { icon: "🗓️", title: "Get your week", text: "One digest per week: what's for lunch each day and the best grocery savings." },
+  { icon: "🔎", title: "We scan nearby", text: "Restaurant lunch menus, Willys/Hemköp deals and fast food chain offers around each place." },
+  { icon: "🗓️", title: "Get your week", text: "One digest per week: what's for lunch each day, the best grocery savings and fast food deals." },
 ];
 
 export default function Home() {
@@ -16,7 +16,7 @@ export default function Home() {
           <span className="text-brand">Get your food week in one place.</span>
         </h1>
         <p className="mx-auto max-w-2xl text-lg text-muted">
-          WeekBite collects this week&apos;s lunch menus and grocery offers around the places you actually spend your
+          WeekBite collects this week&apos;s lunch menus, grocery offers and fast food deals around the places you actually spend your
           week, and summarizes them for you.
         </p>
         <div className="flex justify-center gap-3">

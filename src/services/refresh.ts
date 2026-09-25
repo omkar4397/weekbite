@@ -5,6 +5,7 @@ import type { NewOffer, Source } from "@/db/schema";
 import { currentWeekKey } from "@/lib/week";
 import { scrapeLunch } from "@/scrapers/restaurant";
 import { fetchStoreOffers, type AxfoodChain } from "@/scrapers/axfood";
+import { CHAINS, scrapeChainDeals } from "@/scrapers/fastfood";
 
 async function scrapeSource(source: Source, weekKey: string): Promise<{ offers: NewOffer[]; status: string }> {
   if (source.section === "grocery") {
@@ -14,6 +15,12 @@ async function scrapeSource(source: Source, weekKey: string): Promise<{ offers: 
       offers: items.map((o) => ({ ...o, sourceId: source.id, weekKey, section: "grocery", day: null, url: source.url })),
     };
   }
+  if (source.section === "fastfood") {
+    const chain = CHAINS.find((c) => c.id === source.externalId);
+    if (!chain) return { offers: [], status: "unknown chain" };
+    const { offers, status } = await scrapeChainDeals(chain, weekKey);
+    return { status, offers: offers.map((o) => ({ ...o, sourceId: source.id, weekKey, section: "fastfood", day: null })) };
+  }
   const { offers, status } = await scrapeLunch({ name: source.name, website: source.url! }, weekKey);
   return {
     status,
@@ -22,8 +29,8 @@ async function scrapeSource(source: Source, weekKey: string): Promise<{ offers: 
 }
 
 /**
- * Scrape sources that don't have this week's data yet. Restaurants that had no
- * menu are retried once a day, because many publish on Monday morning.
+ * Scrape sources that don't have this week's data yet. Restaurants and chains
+ * that had nothing are retried once a day, because many publish on Monday morning.
  * Stops early when the time budget runs out (Vercel function limits).
  */
 export async function refreshSources(opts: { sourceIds?: number[]; limit?: number; budgetMs?: number } = {}) {
@@ -37,6 +44,7 @@ export async function refreshSources(opts: { sourceIds?: number[]; limit?: numbe
     isNull(schema.sources.lastScrapedWeek),
     ne(schema.sources.lastScrapedWeek, weekKey),
     and(like(schema.sources.lastStatus, "no menu%"), lt(schema.sources.lastScrapedAt, dayAgo)),
+    and(like(schema.sources.lastStatus, "no deals%"), lt(schema.sources.lastScrapedAt, dayAgo)),
     and(like(schema.sources.lastStatus, "error%"), lt(schema.sources.lastScrapedAt, dayAgo)),
   );
   const linked = sql`exists (select 1 from ${schema.locationSources} ls where ls.source_id = ${schema.sources.id})`;

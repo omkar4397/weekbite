@@ -2,8 +2,9 @@ import "server-only";
 import { and, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { Location, Section } from "@/db/schema";
-import { restaurantsNear } from "@/scrapers/osm";
+import { fastFoodNear, restaurantsNear } from "@/scrapers/osm";
 import { storesNear } from "@/scrapers/axfood";
+import { chainFor } from "@/scrapers/fastfood";
 
 const MAX_RESTAURANTS = Number(process.env.MAX_RESTAURANTS_PER_LOCATION ?? 25);
 
@@ -21,7 +22,8 @@ type SourceRow = {
 
 async function findRestaurants(location: Location): Promise<SourceRow[]> {
   const restaurants = await restaurantsNear(location, location.radiusM, MAX_RESTAURANTS);
-  return restaurants.map((r) => ({
+  // Chain branches have no lunch menus of their own; they're covered by the fast food section.
+  return restaurants.filter((r) => !chainFor({ name: r.name })).map((r) => ({
     section: "lunch",
     provider: "web",
     externalId: r.osmId,
@@ -48,6 +50,28 @@ async function findStores(location: Location): Promise<SourceRow[]> {
     lng: s.lng,
     distanceM: s.distanceM,
   }));
+}
+
+/** Chains with a branch near the location: one source per chain, distance = nearest branch. */
+async function findChains(location: Location): Promise<SourceRow[]> {
+  const places = await fastFoodNear(location, Math.min(Math.max(location.radiusM * 2, 1500), 5000));
+  const nearest = new Map<string, SourceRow>();
+  for (const p of places) {
+    const chain = chainFor({ brand: p.brand ?? undefined, name: p.name });
+    if (!chain || nearest.has(chain.id)) continue; // places are sorted nearest first
+    nearest.set(chain.id, {
+      section: "fastfood",
+      provider: "chain",
+      externalId: chain.id,
+      name: chain.name,
+      url: chain.dealPages[0] ?? chain.homepage,
+      address: null,
+      lat: p.lat,
+      lng: p.lng,
+      distanceM: p.distanceM,
+    });
+  }
+  return [...nearest.values()];
 }
 
 /** Replace the location's links for one section with freshly discovered sources. */
@@ -97,7 +121,7 @@ async function linkSources(location: Location, section: Section, rows: SourceRow
 }
 
 /**
- * Find restaurants and grocery stores around a location and link them to it.
+ * Find restaurants, grocery stores and fast food chains around a location and link them to it.
  * If a lookup fails (public Overpass servers are often busy), existing links
  * for that section are kept and the location stays marked for re-discovery.
  */
@@ -107,12 +131,15 @@ export async function discoverForLocation(location: Location) {
     findRestaurants(location).catch((e) => (console.error("Restaurant discovery failed", e), null)),
     findStores(location).catch((e) => (console.error("Store discovery failed", e), null)),
   ]);
+  // After the restaurant lookup, so the Nominatim fallbacks don't overlap (1 request/second).
+  const chains = await findChains(location).catch((e) => (console.error("Chain discovery failed", e), null));
   if (restaurants) await linkSources(location, "lunch", restaurants);
   if (stores) await linkSources(location, "grocery", stores);
-  if (restaurants && stores) {
+  if (chains) await linkSources(location, "fastfood", chains);
+  if (restaurants && stores && chains) {
     await db.update(schema.locations).set({ discoveredAt: new Date() }).where(eq(schema.locations.id, location.id));
   }
-  return { restaurants: restaurants?.length ?? null, stores: stores?.length ?? null };
+  return { restaurants: restaurants?.length ?? null, stores: stores?.length ?? null, chains: chains?.length ?? null };
 }
 
 /** Locations never fully discovered, or not re-checked for a week. */

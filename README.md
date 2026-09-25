@@ -10,6 +10,7 @@ in two sections:
 |---|---|---|
 | **Lunch & restaurants** | Restaurant websites found via OpenStreetMap | Finds the lunch/menu page (HTML or PDF), extracts this week's dishes per weekday |
 | **Grocery deals** | Willys & Hemköp (Axfood) | Public JSON endpoints: store list + weekly in-store campaigns |
+| **Fast food chains** | McDonald's, Burger King, MAX, Subway, Sibylla, KFC, Pizza Hut, Taco Bar | Chains with a branch nearby (OpenStreetMap); each chain's deal page is scraped once a week (Claude or a price-card heuristic) |
 
 On top of each section there is a short **summary with top picks**, written by Claude when an
 `ANTHROPIC_API_KEY` is set, or rule-based otherwise.
@@ -22,7 +23,8 @@ Next.js 16 (App Router) on Vercel
 ├── src/scrapers
 │   ├── axfood.ts           Willys/Hemköp stores + campaigns (structured JSON)
 │   ├── osm.ts              restaurant discovery via Overpass API
-│   └── restaurant.ts       lunch page finder + Claude/heuristic extraction
+│   ├── restaurant.ts       lunch page finder + Claude/heuristic extraction
+│   └── fastfood.ts         chain registry + deal page scraper
 ├── src/services
 │   ├── discovery.ts        location → nearby sources (location_sources table)
 │   ├── refresh.ts          scrape sources that lack this week's offers

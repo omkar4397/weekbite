@@ -56,12 +56,16 @@ type NominatimPlace = {
 };
 
 /** Fallback when Overpass is down: Nominatim amenity search inside a bounding box. */
-async function nominatimRestaurants(point: { lat: number; lng: number }, radiusM: number) {
+async function nominatimPlaces(
+  point: { lat: number; lng: number },
+  radiusM: number,
+  amenities = ["restaurant", "cafe", "fast_food"],
+) {
   const dLat = radiusM / 111_320;
   const dLng = radiusM / (111_320 * Math.cos((point.lat * Math.PI) / 180));
   const viewbox = [point.lng - dLng, point.lat + dLat, point.lng + dLng, point.lat - dLat].join(",");
   const elements: OverpassElement[] = [];
-  for (const amenity of ["restaurant", "cafe", "fast_food"]) {
+  for (const amenity of amenities) {
     const url =
       `https://nominatim.openstreetmap.org/search?format=jsonv2&amenity=${amenity}` +
       `&viewbox=${viewbox}&bounded=1&extratags=1&addressdetails=1&limit=50`;
@@ -75,7 +79,7 @@ async function nominatimRestaurants(point: { lat: number; lng: number }, radiusM
         lon: Number(p.lon),
         tags: {
           ...p.extratags,
-          name: p.name,
+          ...(p.name ? { name: p.name } : {}),
           "addr:street": p.address?.road ?? "",
           "addr:housenumber": p.address?.house_number ?? "",
           "addr:city": p.address?.city ?? p.address?.town ?? "",
@@ -96,7 +100,7 @@ out center 200;`;
     elements = (await overpass(query)).elements;
   } catch (e) {
     console.warn("Overpass unavailable, falling back to Nominatim:", (e as Error).message);
-    elements = await nominatimRestaurants(point, radiusM);
+    elements = await nominatimPlaces(point, radiusM);
   }
 
   const seen = new Set<string>();
@@ -133,4 +137,48 @@ out center 200;`;
     });
   }
   return out.sort((a, b) => a.distanceM - b.distanceM).slice(0, limit);
+}
+
+export type FastFoodPlace = {
+  osmId: string;
+  name: string;
+  brand: string | null;
+  address: string | null;
+  lat: number;
+  lng: number;
+  distanceM: number;
+};
+
+/** All fast food places near a point, nearest first (used to find chain branches). */
+export async function fastFoodNear(point: { lat: number; lng: number }, radiusM: number) {
+  const query = `[out:json][timeout:25];
+nwr(around:${radiusM},${point.lat},${point.lng})[amenity=fast_food];
+out center 300;`;
+  let elements: OverpassElement[];
+  try {
+    elements = (await overpass(query)).elements;
+  } catch (e) {
+    console.warn("Overpass unavailable, falling back to Nominatim:", (e as Error).message);
+    elements = await nominatimPlaces(point, radiusM, ["fast_food"]);
+  }
+  const out: FastFoodPlace[] = [];
+  for (const el of elements) {
+    const t = el.tags ?? {};
+    const lat = el.lat ?? el.center?.lat;
+    const lng = el.lon ?? el.center?.lon;
+    if (!(t.name || t.brand) || lat == null || lng == null) continue;
+    const dist = distanceM(point, { lat, lng });
+    if (dist > radiusM) continue;
+    const street = [t["addr:street"], t["addr:housenumber"]].filter(Boolean).join(" ");
+    out.push({
+      osmId: `${el.type}/${el.id}`,
+      name: t.name ?? t.brand,
+      brand: t.brand ?? null,
+      address: [street, t["addr:city"]].filter(Boolean).join(", ") || null,
+      lat,
+      lng,
+      distanceM: dist,
+    });
+  }
+  return out.sort((a, b) => a.distanceM - b.distanceM);
 }

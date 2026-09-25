@@ -1,14 +1,30 @@
 /**
  * Smoke-test the scrapers against live sites without a database:
  *   npm run try-scrapers -- "Kungsgatan 10, Stockholm"
+ *   npm run try-scrapers -- --chains      (fast food chain deals only, no address needed)
  */
 import { geocode } from "../src/lib/geo";
 import { storesNear, fetchStoreOffers } from "../src/scrapers/axfood";
-import { restaurantsNear } from "../src/scrapers/osm";
+import { fastFoodNear, restaurantsNear } from "../src/scrapers/osm";
+import { CHAINS, chainFor, scrapeChainDeals } from "../src/scrapers/fastfood";
 import { scrapeLunch } from "../src/scrapers/restaurant";
 import { currentWeekKey } from "../src/lib/week";
 
+async function tryChains() {
+  console.log(`🍔 Fast food chain deals (week ${currentWeekKey()}):`);
+  for (const chain of CHAINS) {
+    try {
+      const res = await scrapeChainDeals(chain, currentWeekKey());
+      console.log(`   ${chain.name} -> ${res.status}`);
+      for (const o of res.offers.slice(0, 5)) console.log(`      · ${o.title} ${o.priceText ?? ""}${o.tags.length ? ` [${o.tags.join(", ")}]` : ""}`);
+    } catch (e) {
+      console.log(`   ${chain.name} -> error: ${(e as Error).message}`);
+    }
+  }
+}
+
 async function main() {
+  if (process.argv[2] === "--chains") return tryChains();
   const address = process.argv[2] ?? "Drottninggatan 50, Stockholm";
   const point = await geocode(address);
   if (!point) throw new Error("Address not found");
@@ -34,6 +50,10 @@ async function main() {
       console.log(`   ${r.name} -> error: ${(e as Error).message}`);
     }
   }
+
+  const branches = (await fastFoodNear(point, 2000)).filter((p) => chainFor({ brand: p.brand ?? undefined, name: p.name }));
+  console.log(`\n🍔 ${branches.length} chain branches within 2 km:`, branches.slice(0, 8).map((b) => `${b.name} (${b.distanceM} m)`));
+  await tryChains();
 }
 
 main().catch((e) => {

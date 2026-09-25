@@ -21,7 +21,7 @@ export type LunchOffer = {
 const LUNCH_WORDS = /lunch|dagens|veckans|meny|menu|matsedel/i;
 const DAY_RE = new RegExp(`^(${WEEKDAYS.map((d) => d.sv).join("|")})\\b`, "i");
 
-function pageText(html: string) {
+export function pageText(html: string) {
   const $ = cheerio.load(html);
   $("script,style,noscript,svg,iframe,header nav,footer,form").remove();
   $("br,p,div,li,h1,h2,h3,h4,h5,h6,tr,section,article").each((_, el) => {

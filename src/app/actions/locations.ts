@@ -61,7 +61,7 @@ export async function addLocation(_: LocationFormState, formData: FormData): Pro
   revalidatePath("/locations");
   const count = (n: number | null, noun: string) => (n == null ? `(${noun} search is busy, we'll retry)` : `${n} ${noun}`);
   return {
-    ok: `Added ${location.label}: found ${count(found.restaurants, "restaurants")} and ${count(found.stores, "grocery stores")} nearby. Fetching this week's offers now — check the dashboard in a few minutes.`,
+    ok: `Added ${location.label}: found ${count(found.restaurants, "restaurants")}, ${count(found.stores, "grocery stores")} and ${count(found.chains, "fast food chains")} nearby. Fetching this week's offers now — check the dashboard in a few minutes.`,
   };
 }
 
@@ -101,7 +101,9 @@ export async function refreshMyOffers() {
   for (const loc of locs) {
     const stale = !loc.discoveredAt || Date.now() - loc.discoveredAt.getTime() > 7 * 86400_000;
     const noRestaurants = !linked.some((l) => l.locationId === loc.id && l.section === "lunch");
-    if (stale || noRestaurants) await discoverForLocation(loc);
+    // Locations added before the fast food section existed have no chains linked yet.
+    const noChains = !linked.some((l) => l.locationId === loc.id && l.section === "fastfood");
+    if (stale || noRestaurants || noChains) await discoverForLocation(loc);
   }
   after(() => scrapeAndDigest(locs.map((l) => l.id), true));
   revalidatePath("/dashboard");

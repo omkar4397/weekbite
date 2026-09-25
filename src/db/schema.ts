@@ -12,7 +12,8 @@ import {
 } from "drizzle-orm/pg-core";
 
 /** Section of the app an offer belongs to. */
-export type Section = "lunch" | "grocery";
+export type Section = "lunch" | "grocery" | "fastfood";
+export const SECTIONS: Section[] = ["lunch", "grocery", "fastfood"];
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -45,7 +46,8 @@ export const locations = pgTable(
 
 /**
  * Something we scrape: a restaurant website or a grocery store.
- * provider = "web" (restaurant site), "willys", "hemkop".
+ * provider = "web" (restaurant site), "willys", "hemkop", "chain" (fast food chain,
+ * externalId = chain id; one source for the whole chain).
  */
 export const sources = pgTable(
   "sources",

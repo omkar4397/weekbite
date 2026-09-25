@@ -10,13 +10,21 @@ import { offersForLocation, getDigest, type OfferView } from "@/services/digest"
 import { DigestCard } from "@/components/DigestCard";
 import { LunchWeek } from "@/components/LunchWeek";
 import { GroceryDeals } from "@/components/GroceryDeals";
+import { FastFoodDeals } from "@/components/FastFoodDeals";
 
 export const maxDuration = 300;
 
 const SECTIONS: { key: Section; label: string }[] = [
   { key: "lunch", label: "🍽️ Lunch & restaurants" },
   { key: "grocery", label: "🛒 Grocery deals" },
+  { key: "fastfood", label: "🍔 Fast food chains" },
 ];
+
+const NOUNS: Record<Section, { sources: string; offers: string }> = {
+  lunch: { sources: "restaurants", offers: "lunch menus" },
+  grocery: { sources: "stores", offers: "grocery deals" },
+  fastfood: { sources: "chains", offers: "fast food deals" },
+};
 
 async function SourceStatus({ location, section }: { location: Location; section: Section }) {
   const db = await getDb();
@@ -28,7 +36,7 @@ async function SourceStatus({ location, section }: { location: Location; section
   const mine = rows.filter((r) => r.section === section);
   const done = mine.filter((r) => r.week === currentWeekKey());
   const withOffers = done.filter((r) => r.status?.startsWith("ok"));
-  const noun = section === "lunch" ? "restaurants" : "stores";
+  const noun = NOUNS[section].sources;
   return (
     <p className="text-xs text-muted">
       Checked {done.length}/{mine.length} {noun} this week · {withOffers.length} had offers
@@ -45,7 +53,7 @@ async function Digest({ location, section, offers }: { location: Location; secti
 export default async function DashboardPage({ searchParams }: PageProps<"/dashboard">) {
   const user = await requireUser();
   const sp = await searchParams;
-  const section: Section = sp.section === "grocery" ? "grocery" : "lunch";
+  const section: Section = SECTIONS.find((s) => s.key === sp.section)?.key ?? "lunch";
   const db = await getDb();
   const locs = await db
     .select()
@@ -121,12 +129,14 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
 
       {offers.length === 0 ? (
         <div className="card p-8 text-center text-muted">
-          No {section === "lunch" ? "lunch menus" : "grocery deals"} found near {location.label} yet this week.
+          No {NOUNS[section].offers} found near {location.label} yet this week.
           <br />
           We&apos;re checking every day. Newly added locations take a few minutes.
         </div>
       ) : section === "lunch" ? (
         <LunchWeek offers={offers} days={location.days} dates={dates} today={todayIsoWeekday()} />
+      ) : section === "fastfood" ? (
+        <FastFoodDeals offers={offers} />
       ) : (
         <GroceryDeals offers={offers} />
       )}
