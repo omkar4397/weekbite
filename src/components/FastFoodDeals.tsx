@@ -24,7 +24,15 @@ function DealCard({ o }: { o: OfferView }) {
       <div className="font-medium leading-tight">{o.title}</div>
       {o.description && <div className="text-xs text-muted line-clamp-3">{o.description}</div>}
       <div className="mt-auto flex items-baseline justify-between pt-1">
-        <span className="font-bold text-brand">{o.priceText ?? "See deal"}</span>
+        {o.priceText ? (
+          <span className="font-bold text-brand">{o.priceText}</span>
+        ) : o.url ? (
+          <a href={o.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand underline">
+            {o.tags.includes("campaign") ? "See campaign" : "See deal"}
+          </a>
+        ) : (
+          <span className="text-muted">Price not listed</span>
+        )}
         {o.savingsSek != null && <span className="text-xs text-good">−{o.savingsSek} kr</span>}
       </div>
       {(o.tags.length > 0 || o.validTo) && (

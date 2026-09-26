@@ -172,6 +172,47 @@ export function heuristicDeals(html: string, url: string): FastFoodDeal[] {
   return [...deals.values()].slice(0, 30);
 }
 
+/**
+ * A campaign page without prices (e.g. MAX "Nu är Cheese Bonanzan igång!"):
+ * one card from its headline, intro text and hero image. Only used on
+ * deal/campaign pages, never on a homepage.
+ */
+export function campaignFromPage(html: string, url: string): FastFoodDeal[] {
+  const $ = cheerio.load(html);
+  $("script,style,noscript,svg,header,nav,footer,form").remove();
+  const root = $("main").length ? $("main") : $("body");
+  const h1 = root.find("h1").first();
+  const title = clean(h1.text());
+  if (title.length < 3 || title.length > 120) return [];
+  const intro = h1
+    .parent()
+    .find("h2,h3,p")
+    .toArray()
+    .map((el) => clean($(el).text()))
+    .filter((t) => t.length > 15 && t !== title);
+  const src = root.find("img").first().attr("src") ?? $('meta[property="og:image"]').attr("content");
+  let imageUrl: string | null = null;
+  try {
+    imageUrl = src ? new URL(src, url).toString() : null;
+  } catch {
+    imageUrl = null;
+  }
+  const text = clean(root.text());
+  return [
+    {
+      title,
+      description: intro.join(" ").slice(0, 280) || null,
+      priceText: null,
+      priceSek: null,
+      savingsSek: null,
+      tags: ["campaign", ...(APP_RE.test(text) ? ["app deal"] : [])],
+      imageUrl,
+      url,
+      validTo: null,
+    },
+  ];
+}
+
 // ---------------------------------------------------------------------------
 // Deals embedded as JSON (Next.js __NEXT_DATA__, JSON-LD, application/json)
 // ---------------------------------------------------------------------------
@@ -335,6 +376,10 @@ export async function scrapeDeals(target: DealTarget, weekKey: string) {
     if (!offers.length) {
       offers = embeddedJsonDeals(page.text, page.finalUrl);
       via = "json";
+    }
+    if (!offers.length) {
+      offers = campaignFromPage(page.text, page.finalUrl);
+      via = "campaign";
     }
     if (offers.length) return { offers, status: `ok (${via}, ${offers.length})`, snapshots };
     stats.push(`${new URL(page.finalUrl).pathname}: ${pageStats(page.text)}`);
