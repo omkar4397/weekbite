@@ -5,6 +5,7 @@ import { SECTIONS, type DigestContent, type Location, type Section } from "@/db/
 import { currentWeekKey, WEEKDAYS } from "@/lib/week";
 import { isClaudeEnabled, summarizeWeek } from "@/lib/claude";
 import { dedupeOffers, type OfferView } from "@/lib/offers";
+import { VENUE_TAG } from "@/scrapers/venues";
 
 export type { OfferView };
 
@@ -134,8 +135,10 @@ function rulesDigest(section: Section, location: Location, offers: OfferView[]):
 }
 
 /** Get (or build and cache) the digest for one location + section this week. */
-export async function getDigest(location: Location, section: Section, offers: OfferView[], force = false) {
+export async function getDigest(location: Location, section: Section, allOffers: OfferView[], force = false) {
   const db = await getDb();
+  // Venue restaurant listings are shown on the tab but aren't deals.
+  const offers = allOffers.filter((o) => !o.tags.includes(VENUE_TAG));
   const weekKey = currentWeekKey();
   const [existing] = await db
     .select()

@@ -76,6 +76,7 @@ function dealLinks(html: string, baseUrl: string) {
     }
     if (!/^https?:$/.test(url.protocol) || url.host !== base.host) return;
     url.hash = "";
+    if (url.pathname === base.pathname || url.pathname === "/") return; // back to the homepage itself
     let score = 1;
     if (/erbjudand|deals?\b|winnin|offers?\b/i.test(label)) score += 2;
     if (/kampanj|just nu/i.test(label)) score += 1;
@@ -267,8 +268,8 @@ export type DealTarget = { name: string; homepage: string | null; dealPages: str
 export type PageSnapshot = { url: string; status: number; html: string };
 
 /**
- * Scrape a chain's or outlet's current deals: known deal pages, then deal links
- * found on the homepage, then the homepage itself. Extraction: Claude when
+ * Scrape a chain's or outlet's current deals from known deal pages and deal links
+ * found on the homepage (never the homepage itself). Extraction: Claude when
  * enabled, otherwise price cards in the HTML, then embedded JSON.
  * When nothing is found, the pages seen are returned as snapshots.
  */
@@ -287,14 +288,22 @@ export async function scrapeDeals(target: DealTarget, weekKey: string) {
     }
   }
 
+  // Only deal/campaign pages count: a homepage or menu lists regular dishes, not deals.
+  if (!pages.length) {
+    if (home) snapshots.push({ url: home.finalUrl, status: 200, html: home.text });
+    return {
+      offers: [] as FastFoodDeal[],
+      status: home ? `no deals page found (/: ${pageStats(home.text)})` : "no deals page found",
+      snapshots,
+    };
+  }
   const stats: string[] = [];
   let lastError: Error | null = null;
-  const candidates = [...pages.slice(0, 3), ...(home ? [home.finalUrl] : [])];
-  for (const pageUrl of [...new Set(candidates)]) {
+  for (const pageUrl of [...new Set(pages.slice(0, 3))]) {
     if (!(await isAllowedByRobots(pageUrl))) continue;
     let page: Awaited<ReturnType<typeof fetchText>>;
     try {
-      page = home && pageUrl === home.finalUrl ? home : await fetchText(pageUrl);
+      page = await fetchText(pageUrl);
     } catch (e) {
       lastError = e as Error;
       stats.push(`${new URL(pageUrl).pathname}: ${lastError.message.replace(/ for https?:\S+/, "")}`);
@@ -332,6 +341,5 @@ export async function scrapeDeals(target: DealTarget, weekKey: string) {
     snapshots.push({ url: page.finalUrl, status: 200, html: page.text });
   }
   if (lastError && !snapshots.length) throw lastError;
-  const status = pages.length || home ? "no deals found" : "no deals page found";
-  return { offers: [] as FastFoodDeal[], status: `${status} (${stats.join("; ")})`.slice(0, 500), snapshots };
+  return { offers: [] as FastFoodDeal[], status: `no deals found (${stats.join("; ")})`.slice(0, 500), snapshots };
 }

@@ -1,5 +1,6 @@
 import type { OfferView } from "@/lib/offers";
 import type { NearbySource } from "@/services/digest";
+import { VENUE_TAG } from "@/scrapers/venues";
 
 const km = (m: number) => (m < 1000 ? `${m} m` : `${(m / 1000).toFixed(1)} km`);
 
@@ -40,8 +41,16 @@ function DealCard({ o }: { o: OfferView }) {
 /** Fast food near a location: places with deals first (nearest first), then the rest as a list. */
 export function FastFoodDeals({ offers, places }: { offers: OfferView[]; places: NearbySource[] }) {
   const bySource = Map.groupBy(offers, (o) => o.sourceId);
-  const withDeals = places.filter((p) => bySource.has(p.id));
-  const without = places.filter((p) => !bySource.has(p.id));
+  const venues = places.filter((p) => p.provider === "venue");
+  const others = places.filter((p) => p.provider !== "venue");
+  const withDeals = others.filter((p) => bySource.has(p.id));
+  const without = others.filter((p) => !bySource.has(p.id));
+  // "Ikki" is listed by the venue too -> show "in Kista Galleria" next to it.
+  const same = (a: string, b: string) => {
+    const [x, y] = [a.toLowerCase(), b.toLowerCase()];
+    return Math.min(x.length, y.length) >= 4 && (x.includes(y) || y.includes(x));
+  };
+  const venueOf = (name: string) => venues.find((v) => (bySource.get(v.id) ?? []).some((r) => same(r.title, name)))?.name;
 
   if (!places.length) {
     return (
@@ -53,6 +62,46 @@ export function FastFoodDeals({ offers, places }: { offers: OfferView[]; places:
 
   return (
     <div className="space-y-6">
+      {venues.map((v) => {
+        const restaurants = (bySource.get(v.id) ?? []).filter((o) => o.tags.includes(VENUE_TAG));
+        return (
+          <section key={v.id} className="card p-4 space-y-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="text-lg font-semibold">🏬 {v.name}</h2>
+              <span className="text-sm text-muted">
+                {km(v.distanceM)}
+                {v.url && (
+                  <>
+                    {" · "}
+                    <a href={v.url} target="_blank" rel="noopener noreferrer" className="underline">
+                      all restaurants
+                    </a>
+                  </>
+                )}
+              </span>
+            </div>
+            {restaurants.length ? (
+              <div className="flex flex-wrap gap-2">
+                {restaurants.map((r) => (
+                  <a
+                    key={r.id}
+                    href={r.url ?? undefined}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={r.description ?? undefined}
+                    className="rounded-full border border-line px-3 py-1 text-sm hover:border-brand"
+                  >
+                    {r.title}
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted">{v.checkedThisWeek ? "Couldn't read the restaurant list." : "Checking…"}</p>
+            )}
+          </section>
+        );
+      })}
+
       {withDeals.map((p) => (
         <section key={p.id} className="space-y-3">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -99,6 +148,7 @@ export function FastFoodDeals({ offers, places }: { offers: OfferView[]; places:
                     <span className="font-medium">{p.name}</span>
                   )}
                   {p.address && <span className="text-muted"> · {p.address}</span>}
+                  {venueOf(p.name) && <span className="text-muted"> · in {venueOf(p.name)}</span>}
                 </span>
                 <span className="text-xs text-muted">
                   {km(p.distanceM)} · {noDealsReason(p)}

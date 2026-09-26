@@ -5,6 +5,8 @@ import type { Location, Section } from "@/db/schema";
 import { fastFoodNear, restaurantsNear } from "@/scrapers/osm";
 import { storesNear } from "@/scrapers/axfood";
 import { chainFor } from "@/scrapers/fastfood";
+import { VENUES, VENUE_RADIUS_M } from "@/scrapers/venues";
+import { distanceM } from "@/lib/geo";
 
 const MAX_RESTAURANTS = Number(process.env.MAX_RESTAURANTS_PER_LOCATION ?? 25);
 
@@ -95,7 +97,20 @@ async function findFastFood(location: Location): Promise<SourceRow[]> {
       distanceM: p.distanceM,
     });
   }
-  return [...chains.values(), ...outlets];
+  const venues = VENUES.map((v) => ({ v, d: distanceM(location, v) }))
+    .filter(({ d }) => d <= VENUE_RADIUS_M)
+    .map<SourceRow>(({ v, d }) => ({
+      section: "fastfood",
+      provider: "venue",
+      externalId: v.id,
+      name: v.name,
+      url: v.restaurantsUrl,
+      address: null,
+      lat: v.lat,
+      lng: v.lng,
+      distanceM: d,
+    }));
+  return [...venues, ...chains.values(), ...outlets];
 }
 
 /** Replace the location's links for one section with freshly discovered sources. */

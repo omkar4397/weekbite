@@ -105,6 +105,12 @@ vercel.json                  cron "0 4 * * *" → /api/cron/refresh (Hobby plan 
 - Extraction order: Claude (if key) → HTML price cards → embedded JSON (`__NEXT_DATA__`, JSON-LD).
   When nothing is found, `last_status` records page stats and the page HTML is saved in `page_snapshots`
   (one row per source). Read it via Supabase to write a site-specific parser.
+- Deals are only read from deal/campaign pages (known URLs or "erbjudanden/kampanj/deals" links), never from a
+  homepage or menu: independents' regular menus (e.g. Mezefabriken) are not deals. Such places are listed only.
+- Venues (`src/scrapers/venues.ts`, `provider = "venue"`): shopping centres with a restaurant directory, e.g.
+  Kista Galleria `/en/restaurants/`. Linked within 3 km; restaurants are stored as offers tagged `venue listing`
+  (excluded from digests) and shown as a list. The directory page is always kept in `page_snapshots`.
+- `refreshSources` claims a source (`last_status = 'scraping'`) before scraping, so overlapping runs don't duplicate offers.
 - McDonald's returns HTTP 403 to our scraper (deliberate). Don't disguise the scraper to get around blocks.
 - Chain branches are excluded from the lunch scrape. Chain deal URLs other than McDonald's winnin-deals are found by following
   "erbjudanden/kampanj/deals" links on the homepage. **Not yet verified against the live sites**: run `npm run try-scrapers -- --chains`.

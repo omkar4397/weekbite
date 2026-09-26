@@ -6,6 +6,7 @@ import { currentWeekKey } from "@/lib/week";
 import { scrapeLunch } from "@/scrapers/restaurant";
 import { fetchStoreOffers, type AxfoodChain } from "@/scrapers/axfood";
 import { CHAINS, scrapeDeals, type PageSnapshot } from "@/scrapers/fastfood";
+import { VENUES, VENUE_TAG, scrapeVenue } from "@/scrapers/venues";
 
 const SNAPSHOT_MAX_CHARS = 400_000;
 
@@ -24,6 +25,25 @@ async function scrapeSource(source: Source, weekKey: string): Promise<{ offers: 
     return {
       status: `ok (${items.length})`,
       offers: items.map((o) => ({ ...o, sourceId: source.id, weekKey, section: "grocery", day: null, url: source.url })),
+    };
+  }
+  if (source.section === "fastfood" && source.provider === "venue") {
+    const venue = VENUES.find((v) => v.id === source.externalId);
+    if (!venue) return { offers: [], status: "unknown venue" };
+    const { restaurants, status, snapshots } = await scrapeVenue(venue);
+    if (snapshots[0]) await saveSnapshot(source.id, snapshots[0]);
+    return {
+      status,
+      offers: restaurants.map((r) => ({
+        sourceId: source.id,
+        weekKey,
+        section: "fastfood",
+        day: null,
+        title: r.name,
+        description: r.description,
+        url: r.url,
+        tags: [VENUE_TAG],
+      })),
     };
   }
   if (source.section === "fastfood") {
@@ -69,12 +89,31 @@ export async function refreshSources(opts: { sourceIds?: number[]; limit?: numbe
     .orderBy(asc(schema.sources.section), sql`${schema.sources.lastScrapedAt} asc nulls first`)
     .limit(opts.limit ?? 60);
 
-  const results = { scraped: 0, offers: 0, errors: 0, skipped: 0 };
+  const results = { scraped: 0, offers: 0, errors: 0, skipped: 0, busy: 0 };
   const queue = [...todo];
   const worker = async () => {
     for (let s = queue.shift(); s; s = queue.shift()) {
       if (Date.now() - started > budgetMs) {
         results.skipped++;
+        continue;
+      }
+      // Claim the source so overlapping refreshes (button + cron) don't scrape it twice.
+      const claimed = await db
+        .update(schema.sources)
+        .set({ lastStatus: "scraping", lastScrapedAt: new Date() })
+        .where(
+          and(
+            eq(schema.sources.id, s.id),
+            or(
+              isNull(schema.sources.lastStatus),
+              ne(schema.sources.lastStatus, "scraping"),
+              lt(schema.sources.lastScrapedAt, new Date(Date.now() - 10 * 60_000)),
+            ),
+          ),
+        )
+        .returning({ id: schema.sources.id });
+      if (!claimed.length) {
+        results.busy++; // another refresh is scraping it right now
         continue;
       }
       let status: string;
