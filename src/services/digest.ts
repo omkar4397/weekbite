@@ -87,14 +87,17 @@ export async function sourcesForLocation(location: Location, section: Section): 
     .sort((a, b) => a.distanceM - b.distanceM);
 }
 
+/** "1 deal", "3 deals". */
+const n = (count: number, one: string, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
+
 function rulesDigest(section: Section, location: Location, offers: OfferView[]): DigestContent {
   if (section === "grocery") {
     const unique = dedupeOffers(offers);
     const top = unique.sort((a, b) => (b.savingsSek ?? 0) - (a.savingsSek ?? 0)).slice(0, 6);
     const stores = new Set(offers.map((o) => o.sourceName)).size;
     return {
-      headline: `${unique.length} grocery deals near ${location.label}`,
-      summary: `${stores} store(s) within reach have ${unique.length} different deals this week. The biggest savings are listed first — up to ${Math.round(top[0]?.savingsSek ?? 0)} kr on a single item.`,
+      headline: `${n(unique.length, "grocery deal")} near ${location.label}`,
+      summary: `${n(stores, "store")} within reach ${stores === 1 ? "has" : "have"} ${n(unique.length, "different deal")} this week. The biggest savings are listed first — up to ${Math.round(top[0]?.savingsSek ?? 0)} kr on a single item.`,
       picks: top.map((o) => ({
         offerId: o.id,
         reason: `Save ${o.savingsSek ?? "?"} kr${o.stores.length > 1 ? ` · ${o.stores.length} stores` : ""}`,
@@ -109,8 +112,8 @@ function rulesDigest(section: Section, location: Location, offers: OfferView[]):
     const picks = [...new Map([...cheapest, ...nearest].map((o) => [o.id, o])).values()];
     const chains = [...new Set(offers.map((o) => o.sourceName))];
     return {
-      headline: `${offers.length} fast food deals near ${location.label}`,
-      summary: `${chains.join(", ")} ${chains.length > 1 ? "have" : "has"} ${offers.length} deal(s) this week${priced.length ? `, from ${Math.min(...priced.map((o) => o.priceSek!))} kr` : ""}. Chain deals are valid in every branch; the distance is to the nearest one.`,
+      headline: `${n(offers.length, "fast food deal")} near ${location.label}`,
+      summary: `${chains.join(", ")} ${chains.length > 1 ? "have" : "has"} ${n(offers.length, "deal")} this week${priced.length ? `, from ${Math.min(...priced.map((o) => o.priceSek!))} kr` : ""}. Chain deals are valid in every branch; the distance is to the nearest one.`,
       picks: picks.map((o) => ({
         offerId: o.id,
         reason: o.priceSek && cheapest.includes(o) ? `${o.priceSek} kr at ${o.sourceName}` : `${o.sourceName} is ${o.distanceM} m away`,
@@ -124,8 +127,8 @@ function rulesDigest(section: Section, location: Location, offers: OfferView[]):
   const picks = [...new Map([...cheapest, ...nearest].map((o) => [o.id, o])).values()];
   const places = new Set(offers.map((o) => o.sourceName)).size;
   return {
-    headline: `${places} lunch spots near ${location.label}`,
-    summary: `${offers.length} lunch dishes from ${places} restaurant(s) this week${priced.length ? `, from ${Math.min(...priced.map((o) => o.priceSek!))} kr` : ""}. Add an Anthropic API key for an AI-written summary.`,
+    headline: `${n(places, "lunch spot")} near ${location.label}`,
+    summary: `${n(offers.length, "lunch dish", "lunch dishes")} from ${n(places, "restaurant")} this week${priced.length ? `, from ${Math.min(...priced.map((o) => o.priceSek!))} kr` : ""}. The best-value and nearest picks are below.`,
     picks: picks.map((o) => ({
       offerId: o.id,
       reason: o.priceSek && cheapest.includes(o) ? `Good value at ${o.priceSek} kr` : `Only ${o.distanceM} m away`,

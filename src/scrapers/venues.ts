@@ -50,6 +50,29 @@ function titleFromSlug(slug: string) {
 export function parseDirectory(html: string, pageUrl: string): VenueRestaurant[] {
   const $ = cheerio.load(html);
   $("script,style,noscript,svg,header,footer,nav").remove();
+
+  // Store cards (e.g. Citycon centres such as Kista Galleria): <div class="store-card"
+  // data-website-cat="restaurants"><a href="/en/store/ikki-3/"><h4>Ikki</h4><p>Cafes and Restaurants · Ground Floor</p>
+  const cards = $('[data-website-cat="restaurants"], .store-card').toArray();
+  const fromCards = new Map<string, VenueRestaurant>();
+  for (const el of cards) {
+    const $c = $(el);
+    const cat = $c.attr("data-website-cat");
+    if (cat && cat !== "restaurants") continue;
+    const href = $c.find("a[href]").first().attr("href");
+    const name = clean($c.find("h1,h2,h3,h4,h5,[class*=title],[class*=name]").first().text());
+    if (!href || name.length < 2 || name.length > 60) continue;
+    let url: string;
+    try {
+      url = new URL(href, pageUrl).toString();
+    } catch {
+      continue;
+    }
+    const details = clean($c.find("p").first().text()).replace(/\s*·\s*/g, " · ");
+    fromCards.set(url, { name, url, description: details && details !== name ? details.slice(0, 120) : null });
+  }
+  if (fromCards.size >= 3) return [...fromCards.values()].sort((a, b) => a.name.localeCompare(b.name, "sv"));
+
   const base = new URL(pageUrl);
   const prefix = base.pathname.endsWith("/") ? base.pathname : `${base.pathname}/`;
   const found = new Map<string, VenueRestaurant>();

@@ -11,20 +11,21 @@ import { ExploreForm } from "@/components/ExploreForm";
 
 export const maxDuration = 300;
 
-// One background discovery per place per server instance.
-const discovering = new Set<number>();
+// Background work per place, at most once per 10 minutes per server instance.
+const lastKick = new Map<number, number>();
 
-/** Demo areas start empty; the first visit finds what's around them and collects offers. */
-function ensureCollected(location: Location) {
-  if (location.discoveredAt || discovering.has(location.id)) return;
-  discovering.add(location.id);
+/**
+ * Keeps public places current without an account or the daily cron: the first
+ * visit finds what's around a place, later visits scrape anything not yet
+ * checked this week (refreshSources skips what's already done).
+ */
+function keepFresh(location: Location) {
+  const now = Date.now();
+  if (now - (lastKick.get(location.id) ?? 0) < 10 * 60_000) return;
+  lastKick.set(location.id, now);
   after(async () => {
-    try {
-      await discoverForLocation(location);
-      await scrapeAndDigest([location.id]);
-    } finally {
-      discovering.delete(location.id);
-    }
+    if (!location.discoveredAt) await discoverForLocation(location);
+    await scrapeAndDigest([location.id]);
   });
 }
 
@@ -35,7 +36,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   const [featured, user] = await Promise.all([featuredLocations(), getCurrentUser()]);
   const searched = placeParam && !featured.some((f) => f.slug === placeParam) ? await locationBySlug(placeParam) : null;
   const location = searched ?? featured.find((f) => f.slug === placeParam) ?? featured[0];
-  ensureCollected(location);
+  keepFresh(location);
 
   const chips = [...(searched ? [searched] : []), ...featured].map((l) => ({ key: l.slug!, label: l.label }));
   const dates = currentWeekDates();
