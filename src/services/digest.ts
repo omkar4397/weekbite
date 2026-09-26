@@ -52,6 +52,40 @@ export async function offersForLocation(location: Location, section: Section, we
     }));
 }
 
+export type NearbySource = {
+  id: number;
+  provider: string;
+  name: string;
+  url: string | null;
+  address: string | null;
+  distanceM: number;
+  status: string | null;
+  checkedThisWeek: boolean;
+};
+
+/** Every source of one section linked to a location, nearest first (with or without offers). */
+export async function sourcesForLocation(location: Location, section: Section): Promise<NearbySource[]> {
+  const db = await getDb();
+  const weekKey = currentWeekKey();
+  const rows = await db
+    .select({ source: schema.sources, distanceM: schema.locationSources.distanceM })
+    .from(schema.locationSources)
+    .innerJoin(schema.sources, eq(schema.sources.id, schema.locationSources.sourceId))
+    .where(and(eq(schema.locationSources.locationId, location.id), eq(schema.sources.section, section)));
+  return rows
+    .map((r) => ({
+      id: r.source.id,
+      provider: r.source.provider,
+      name: r.source.name,
+      url: r.source.url,
+      address: r.source.address,
+      distanceM: r.distanceM,
+      status: r.source.lastStatus,
+      checkedThisWeek: r.source.lastScrapedWeek === weekKey,
+    }))
+    .sort((a, b) => a.distanceM - b.distanceM);
+}
+
 function rulesDigest(section: Section, location: Location, offers: OfferView[]): DigestContent {
   if (section === "grocery") {
     const unique = dedupeOffers(offers);
@@ -75,7 +109,7 @@ function rulesDigest(section: Section, location: Location, offers: OfferView[]):
     const chains = [...new Set(offers.map((o) => o.sourceName))];
     return {
       headline: `${offers.length} fast food deals near ${location.label}`,
-      summary: `${chains.join(", ")} ${chains.length > 1 ? "have" : "has"} ${offers.length} deal(s) this week${priced.length ? `, from ${Math.min(...priced.map((o) => o.priceSek!))} kr` : ""}. Deals are valid in every branch; the nearest branch is shown for each chain.`,
+      summary: `${chains.join(", ")} ${chains.length > 1 ? "have" : "has"} ${offers.length} deal(s) this week${priced.length ? `, from ${Math.min(...priced.map((o) => o.priceSek!))} kr` : ""}. Chain deals are valid in every branch; the distance is to the nearest one.`,
       picks: picks.map((o) => ({
         offerId: o.id,
         reason: o.priceSek && cheapest.includes(o) ? `${o.priceSek} kr at ${o.sourceName}` : `${o.sourceName} is ${o.distanceM} m away`,

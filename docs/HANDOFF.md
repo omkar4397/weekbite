@@ -100,6 +100,12 @@ vercel.json                  cron "0 4 * * *" → /api/cron/refresh (Hobby plan 
 ### Fast food section
 - One `sources` row per chain (`provider = "chain"`, `externalId` = chain id), scraped once a week and shared by all users.
 - A chain is linked to a location only if OSM has a branch within 2× radius (1.5–5 km); `distance_m` = nearest branch.
+- Other fast food places and food courts from OSM (e.g. a mall food court) are sources too (`provider = "outlet"`,
+  ≤30 per location, `url` = their website or null). The tab lists every place, with deals first.
+- Extraction order: Claude (if key) → HTML price cards → embedded JSON (`__NEXT_DATA__`, JSON-LD).
+  When nothing is found, `last_status` records page stats and the page HTML is saved in `page_snapshots`
+  (one row per source). Read it via Supabase to write a site-specific parser.
+- McDonald's returns HTTP 403 to our scraper (deliberate). Don't disguise the scraper to get around blocks.
 - Chain branches are excluded from the lunch scrape. Chain deal URLs other than McDonald's winnin-deals are found by following
   "erbjudanden/kampanj/deals" links on the homepage. **Not yet verified against the live sites**: run `npm run try-scrapers -- --chains`.
 

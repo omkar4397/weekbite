@@ -52,26 +52,50 @@ async function findStores(location: Location): Promise<SourceRow[]> {
   }));
 }
 
-/** Chains with a branch near the location: one source per chain, distance = nearest branch. */
-async function findChains(location: Location): Promise<SourceRow[]> {
+const MAX_OUTLETS = 30;
+
+/**
+ * Fast food near the location: known chains (one source per chain, distance =
+ * nearest branch) plus other fast food places and food courts, such as the
+ * outlets in a shopping centre food court.
+ */
+async function findFastFood(location: Location): Promise<SourceRow[]> {
   const places = await fastFoodNear(location, Math.min(Math.max(location.radiusM * 2, 1500), 5000));
-  const nearest = new Map<string, SourceRow>();
+  const chains = new Map<string, SourceRow>();
+  const outlets: SourceRow[] = [];
   for (const p of places) {
+    // places are sorted nearest first
     const chain = chainFor({ brand: p.brand ?? undefined, name: p.name });
-    if (!chain || nearest.has(chain.id)) continue; // places are sorted nearest first
-    nearest.set(chain.id, {
+    if (chain) {
+      if (!chains.has(chain.id)) {
+        chains.set(chain.id, {
+          section: "fastfood",
+          provider: "chain",
+          externalId: chain.id,
+          name: chain.name,
+          url: chain.dealPages[0] ?? chain.homepage,
+          address: null,
+          lat: p.lat,
+          lng: p.lng,
+          distanceM: p.distanceM,
+        });
+      }
+      continue;
+    }
+    if (outlets.length >= MAX_OUTLETS) continue;
+    outlets.push({
       section: "fastfood",
-      provider: "chain",
-      externalId: chain.id,
-      name: chain.name,
-      url: chain.dealPages[0] ?? chain.homepage,
-      address: null,
+      provider: "outlet",
+      externalId: p.osmId,
+      name: p.name,
+      url: p.website,
+      address: [p.foodCourt ? "Food court" : null, p.address, p.cuisine].filter(Boolean).join(" · ") || null,
       lat: p.lat,
       lng: p.lng,
       distanceM: p.distanceM,
     });
   }
-  return [...nearest.values()];
+  return [...chains.values(), ...outlets];
 }
 
 /** Replace the location's links for one section with freshly discovered sources. */
@@ -141,7 +165,7 @@ export async function discoverForLocation(location: Location) {
     findStores(location).catch(fail("Store")),
   ]);
   // After the restaurant lookup, so the Nominatim fallbacks don't overlap (1 request/second).
-  const chains = await findChains(location).catch(fail("Chain"));
+  const chains = await findFastFood(location).catch(fail("Fast food"));
   if (restaurants) await linkSources(location, "lunch", restaurants);
   if (stores) await linkSources(location, "grocery", stores);
   if (chains) await linkSources(location, "fastfood", chains);

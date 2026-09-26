@@ -6,7 +6,7 @@
 import { geocode } from "../src/lib/geo";
 import { storesNear, fetchStoreOffers } from "../src/scrapers/axfood";
 import { fastFoodNear, restaurantsNear } from "../src/scrapers/osm";
-import { CHAINS, chainFor, scrapeChainDeals } from "../src/scrapers/fastfood";
+import { CHAINS, chainFor, scrapeDeals } from "../src/scrapers/fastfood";
 import { scrapeLunch } from "../src/scrapers/restaurant";
 import { currentWeekKey } from "../src/lib/week";
 
@@ -14,7 +14,7 @@ async function tryChains() {
   console.log(`🍔 Fast food chain deals (week ${currentWeekKey()}):`);
   for (const chain of CHAINS) {
     try {
-      const res = await scrapeChainDeals(chain, currentWeekKey());
+      const res = await scrapeDeals(chain, currentWeekKey());
       console.log(`   ${chain.name} -> ${res.status}`);
       for (const o of res.offers.slice(0, 5)) console.log(`      · ${o.title} ${o.priceText ?? ""}${o.tags.length ? ` [${o.tags.join(", ")}]` : ""}`);
     } catch (e) {

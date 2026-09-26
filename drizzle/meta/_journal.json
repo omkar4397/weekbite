@@ -15,6 +15,13 @@
       "when": 1790404871907,
       "tag": "0001_location_discovery_error",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790405686839,
+      "tag": "0002_page_snapshots",
+      "breakpoints": true
     }
   ]
 }

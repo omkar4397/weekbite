@@ -79,6 +79,7 @@ async function nominatimPlaces(
         lon: Number(p.lon),
         tags: {
           ...p.extratags,
+          amenity,
           ...(p.name ? { name: p.name } : {}),
           "addr:street": p.address?.road ?? "",
           "addr:housenumber": p.address?.house_number ?? "",
@@ -143,23 +144,26 @@ export type FastFoodPlace = {
   osmId: string;
   name: string;
   brand: string | null;
+  website: string | null;
+  cuisine: string | null;
+  foodCourt: boolean;
   address: string | null;
   lat: number;
   lng: number;
   distanceM: number;
 };
 
-/** All fast food places near a point, nearest first (used to find chain branches). */
+/** Fast food places and food courts near a point, nearest first. */
 export async function fastFoodNear(point: { lat: number; lng: number }, radiusM: number) {
   const query = `[out:json][timeout:25];
-nwr(around:${radiusM},${point.lat},${point.lng})[amenity=fast_food];
+nwr(around:${radiusM},${point.lat},${point.lng})[amenity~"^(fast_food|food_court)$"];
 out center 300;`;
   let elements: OverpassElement[];
   try {
     elements = (await overpass(query)).elements;
   } catch (e) {
     console.warn("Overpass unavailable, falling back to Nominatim:", (e as Error).message);
-    elements = await nominatimPlaces(point, radiusM, ["fast_food"]);
+    elements = await nominatimPlaces(point, radiusM, ["fast_food", "food_court"]);
   }
   const out: FastFoodPlace[] = [];
   for (const el of elements) {
@@ -170,10 +174,20 @@ out center 300;`;
     const dist = distanceM(point, { lat, lng });
     if (dist > radiusM) continue;
     const street = [t["addr:street"], t["addr:housenumber"]].filter(Boolean).join(" ");
+    const site = t.website ?? t["contact:website"];
+    let website: string | null = null;
+    try {
+      website = site ? new URL(/^https?:\/\//.test(site) ? site : `https://${site}`).toString() : null;
+    } catch {
+      website = null;
+    }
     out.push({
       osmId: `${el.type}/${el.id}`,
       name: t.name ?? t.brand,
       brand: t.brand ?? null,
+      website,
+      cuisine: t.cuisine?.replace(/_/g, " ").replace(/;/g, ", ") ?? null,
+      foodCourt: t.amenity === "food_court",
       address: [street, t["addr:city"]].filter(Boolean).join(", ") || null,
       lat,
       lng,

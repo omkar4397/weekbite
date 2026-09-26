@@ -49,7 +49,8 @@ export const locations = pgTable(
 /**
  * Something we scrape: a restaurant website or a grocery store.
  * provider = "web" (restaurant site), "willys", "hemkop", "chain" (fast food chain,
- * externalId = chain id; one source for the whole chain).
+ * externalId = chain id; one source for the whole chain), "outlet" (any other fast
+ * food place or food court from OSM, externalId = OSM id, url may be null).
  */
 export const sources = pgTable(
   "sources",
@@ -136,6 +137,20 @@ export const digests = pgTable(
   },
   (t) => [uniqueIndex("digests_unique_idx").on(t.locationId, t.weekKey, t.section)],
 );
+
+/**
+ * The last page fetched for a source that yielded no offers. Lets us see what a
+ * site really returns (markup, embedded data) when writing a better parser.
+ */
+export const pageSnapshots = pgTable("page_snapshots", {
+  sourceId: integer("source_id")
+    .primaryKey()
+    .references(() => sources.id, { onDelete: "cascade" }),
+  url: text("url").notNull(),
+  status: integer("status").notNull(),
+  html: text("html").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 export type User = typeof users.$inferSelect;
 export type Location = typeof locations.$inferSelect;

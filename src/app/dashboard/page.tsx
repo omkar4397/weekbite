@@ -6,7 +6,7 @@ import type { Location, Section } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { currentWeekDates, currentWeekKey, todayIsoWeekday, weekNumber } from "@/lib/week";
 import { refreshMyOffers } from "@/app/actions/locations";
-import { offersForLocation, getDigest, type OfferView } from "@/services/digest";
+import { offersForLocation, getDigest, sourcesForLocation, type OfferView } from "@/services/digest";
 import { DigestCard } from "@/components/DigestCard";
 import { LunchWeek } from "@/components/LunchWeek";
 import { GroceryDeals } from "@/components/GroceryDeals";
@@ -23,7 +23,7 @@ const SECTIONS: { key: Section; label: string }[] = [
 const NOUNS: Record<Section, { sources: string; offers: string }> = {
   lunch: { sources: "restaurants", offers: "lunch menus" },
   grocery: { sources: "stores", offers: "grocery deals" },
-  fastfood: { sources: "chains", offers: "fast food deals" },
+  fastfood: { sources: "fast food places", offers: "fast food deals" },
 };
 
 async function SourceStatus({ location, section }: { location: Location; section: Section }) {
@@ -73,6 +73,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
 
   const location = locs.find((l) => String(l.id) === sp.loc) ?? locs[0];
   const offers = await offersForLocation(location, section);
+  const places = section === "fastfood" ? await sourcesForLocation(location, section) : [];
   const dates = currentWeekDates();
   const weekKey = currentWeekKey();
   const href = (p: { section?: Section; loc?: number }) =>
@@ -127,7 +128,9 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
         <Digest location={location} section={section} offers={offers} />
       </Suspense>
 
-      {offers.length === 0 ? (
+      {section === "fastfood" ? (
+        <FastFoodDeals offers={offers} places={places} />
+      ) : offers.length === 0 ? (
         <div className="card p-8 text-center text-muted">
           No {NOUNS[section].offers} found near {location.label} yet this week.
           <br />
@@ -135,8 +138,6 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
         </div>
       ) : section === "lunch" ? (
         <LunchWeek offers={offers} days={location.days} dates={dates} today={todayIsoWeekday()} />
-      ) : section === "fastfood" ? (
-        <FastFoodDeals offers={offers} />
       ) : (
         <GroceryDeals offers={offers} />
       )}

@@ -5,7 +5,18 @@ import type { NewOffer, Source } from "@/db/schema";
 import { currentWeekKey } from "@/lib/week";
 import { scrapeLunch } from "@/scrapers/restaurant";
 import { fetchStoreOffers, type AxfoodChain } from "@/scrapers/axfood";
-import { CHAINS, scrapeChainDeals } from "@/scrapers/fastfood";
+import { CHAINS, scrapeDeals, type PageSnapshot } from "@/scrapers/fastfood";
+
+const SNAPSHOT_MAX_CHARS = 400_000;
+
+async function saveSnapshot(sourceId: number, snap: PageSnapshot) {
+  const db = await getDb();
+  const row = { url: snap.url, status: snap.status, html: snap.html.slice(0, SNAPSHOT_MAX_CHARS), createdAt: new Date() };
+  await db
+    .insert(schema.pageSnapshots)
+    .values({ sourceId, ...row })
+    .onConflictDoUpdate({ target: schema.pageSnapshots.sourceId, set: row });
+}
 
 async function scrapeSource(source: Source, weekKey: string): Promise<{ offers: NewOffer[]; status: string }> {
   if (source.section === "grocery") {
@@ -16,9 +27,11 @@ async function scrapeSource(source: Source, weekKey: string): Promise<{ offers: 
     };
   }
   if (source.section === "fastfood") {
-    const chain = CHAINS.find((c) => c.id === source.externalId);
-    if (!chain) return { offers: [], status: "unknown chain" };
-    const { offers, status } = await scrapeChainDeals(chain, weekKey);
+    const chain = source.provider === "chain" ? CHAINS.find((c) => c.id === source.externalId) : null;
+    if (source.provider === "chain" && !chain) return { offers: [], status: "unknown chain" };
+    const target = chain ?? { name: source.name, homepage: source.url, dealPages: [] };
+    const { offers, status, snapshots } = await scrapeDeals(target, weekKey);
+    if (snapshots[0]) await saveSnapshot(source.id, snapshots[0]);
     return { status, offers: offers.map((o) => ({ ...o, sourceId: source.id, weekKey, section: "fastfood", day: null })) };
   }
   const { offers, status } = await scrapeLunch({ name: source.name, website: source.url! }, weekKey);
