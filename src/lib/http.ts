@@ -25,8 +25,8 @@ export async function fetchText(url: string) {
   return { text: await res.text(), contentType: res.headers.get("content-type") ?? "", finalUrl: res.url };
 }
 
-export async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await politeFetch(url, { ...init, headers: { Accept: "application/json", ...init?.headers } });
+export async function fetchJson<T>(url: string, init?: RequestInit, timeoutMs?: number): Promise<T> {
+  const res = await politeFetch(url, { ...init, headers: { Accept: "application/json", ...init?.headers } }, timeoutMs);
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
   return (await res.json()) as T;
 }

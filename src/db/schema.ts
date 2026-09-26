@@ -39,6 +39,8 @@ export const locations = pgTable(
     /** ISO weekdays the user is here: 1 = Monday ... 7 = Sunday. */
     days: jsonb("days").$type<number[]>().notNull().default([1, 2, 3, 4, 5]),
     discoveredAt: timestamp("discovered_at", { withTimezone: true }),
+    /** Why the last discovery was incomplete (null when every lookup worked). */
+    discoveryError: text("discovery_error"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("locations_user_idx").on(t.userId)],

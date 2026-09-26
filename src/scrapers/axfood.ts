@@ -41,7 +41,13 @@ export async function listStores(chain: AxfoodChain): Promise<GroceryStore[]> {
   const cached = storeCache.get(chain);
   if (cached && Date.now() - cached.at < 6 * 3600_000) return cached.stores;
   const { base, name } = AXFOOD_CHAINS[chain];
-  const raw = await fetchJson<RawStore[]>(`${base}/axfood/rest/store?online=false`);
+  const url = `${base}/axfood/rest/store?online=false`;
+  // The full store list is a large response; allow extra time and one retry.
+  const raw = await fetchJson<RawStore[]>(url, undefined, 25_000).catch(async (e) => {
+    console.warn(`${name} store list failed, retrying:`, (e as Error).message);
+    await new Promise((r) => setTimeout(r, 2000));
+    return fetchJson<RawStore[]>(url, undefined, 25_000);
+  });
   const stores = raw
     .filter((s) => s.geoPoint && s.geoPoint.latitude !== 0 && s.name && !s.onlineStore)
     .map((s) => ({
@@ -57,8 +63,14 @@ export async function listStores(chain: AxfoodChain): Promise<GroceryStore[]> {
   return stores;
 }
 
+/** Stores of all chains near a point. One chain failing doesn't hide the other's stores. */
 export async function storesNear(point: { lat: number; lng: number }, radiusM: number) {
-  const all = (await Promise.all((Object.keys(AXFOOD_CHAINS) as AxfoodChain[]).map(listStores))).flat();
+  const chains = Object.keys(AXFOOD_CHAINS) as AxfoodChain[];
+  const results = await Promise.allSettled(chains.map(listStores));
+  const failed = results.flatMap((r, i) => (r.status === "rejected" ? [`${chains[i]}: ${(r.reason as Error).message}`] : []));
+  if (failed.length === chains.length) throw new Error(failed.join("; "));
+  if (failed.length) console.warn("Some store lists failed:", failed.join("; "));
+  const all = results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
   return all
     .map((s) => ({ ...s, distanceM: distanceM(point, s) }))
     .filter((s) => s.distanceM <= radiusM)

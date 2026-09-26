@@ -127,18 +127,31 @@ async function linkSources(location: Location, section: Section, rows: SourceRow
  */
 export async function discoverForLocation(location: Location) {
   const db = await getDb();
+  const errors: string[] = [];
+  const fail = (what: string) => (e: unknown) => {
+    console.error(`${what} discovery failed`, e);
+    // Node reports network failures as "fetch failed"; the cause says why (DNS, reset, timeout...).
+    const cause = (e as { cause?: { code?: string; message?: string } }).cause;
+    const detail = cause ? ` (${cause.code ?? cause.message})` : "";
+    errors.push(`${what}: ${(e as Error).message}${detail}`.slice(0, 300));
+    return null;
+  };
   const [restaurants, stores] = await Promise.all([
-    findRestaurants(location).catch((e) => (console.error("Restaurant discovery failed", e), null)),
-    findStores(location).catch((e) => (console.error("Store discovery failed", e), null)),
+    findRestaurants(location).catch(fail("Restaurant")),
+    findStores(location).catch(fail("Store")),
   ]);
   // After the restaurant lookup, so the Nominatim fallbacks don't overlap (1 request/second).
-  const chains = await findChains(location).catch((e) => (console.error("Chain discovery failed", e), null));
+  const chains = await findChains(location).catch(fail("Chain"));
   if (restaurants) await linkSources(location, "lunch", restaurants);
   if (stores) await linkSources(location, "grocery", stores);
   if (chains) await linkSources(location, "fastfood", chains);
-  if (restaurants && stores && chains) {
-    await db.update(schema.locations).set({ discoveredAt: new Date() }).where(eq(schema.locations.id, location.id));
-  }
+  await db
+    .update(schema.locations)
+    .set({
+      discoveryError: errors.length ? errors.join(" | ") : null,
+      ...(restaurants && stores && chains ? { discoveredAt: new Date() } : {}),
+    })
+    .where(eq(schema.locations.id, location.id));
   return { restaurants: restaurants?.length ?? null, stores: stores?.length ?? null, chains: chains?.length ?? null };
 }
 
