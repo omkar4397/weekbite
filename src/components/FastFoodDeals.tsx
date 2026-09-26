@@ -63,7 +63,7 @@ export function FastFoodDeals({ offers, places }: { offers: OfferView[]; places:
   if (!places.length) {
     return (
       <div className="card p-8 text-center text-muted">
-        No fast food places found nearby yet. Newly added locations take a few minutes — try ↻ Refresh offers.
+        No fast food places found nearby yet. Newly added places take a few minutes, so check back shortly.
       </div>
     );
   }

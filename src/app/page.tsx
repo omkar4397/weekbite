@@ -1,38 +1,76 @@
 import Link from "next/link";
+import { after } from "next/server";
+import type { Location } from "@/db/schema";
+import { getCurrentUser } from "@/lib/auth";
+import { featuredLocations, locationBySlug } from "@/lib/guest";
+import { currentWeekDates, currentWeekKey, weekNumber } from "@/lib/week";
+import { discoverForLocation } from "@/services/discovery";
+import { scrapeAndDigest } from "@/services/pipeline";
+import { WeekView, parseSection } from "@/components/WeekView";
+import { ExploreForm } from "@/components/ExploreForm";
 
-const steps = [
-  { icon: "📍", title: "Add your places", text: "Office, home, the gym — plus the weekdays you're usually there." },
-  { icon: "🔎", title: "We scan nearby", text: "Restaurant lunch menus, Willys/Hemköp deals and fast food chain offers around each place." },
-  { icon: "🗓️", title: "Get your week", text: "One digest per week: what's for lunch each day, the best grocery savings and fast food deals." },
-];
+export const maxDuration = 300;
 
-export default function Home() {
+// One background discovery per place per server instance.
+const discovering = new Set<number>();
+
+/** Demo areas start empty; the first visit finds what's around them and collects offers. */
+function ensureCollected(location: Location) {
+  if (location.discoveredAt || discovering.has(location.id)) return;
+  discovering.add(location.id);
+  after(async () => {
+    try {
+      await discoverForLocation(location);
+      await scrapeAndDigest([location.id]);
+    } finally {
+      discovering.delete(location.id);
+    }
+  });
+}
+
+export default async function Home({ searchParams }: PageProps<"/">) {
+  const sp = await searchParams;
+  const section = parseSection(sp.section);
+  const placeParam = typeof sp.place === "string" ? sp.place : undefined;
+  const [featured, user] = await Promise.all([featuredLocations(), getCurrentUser()]);
+  const searched = placeParam && !featured.some((f) => f.slug === placeParam) ? await locationBySlug(placeParam) : null;
+  const location = searched ?? featured.find((f) => f.slug === placeParam) ?? featured[0];
+  ensureCollected(location);
+
+  const chips = [...(searched ? [searched] : []), ...featured].map((l) => ({ key: l.slug!, label: l.label }));
+  const dates = currentWeekDates();
+
   return (
-    <div className="space-y-16 py-8">
-      <section className="text-center space-y-6">
-        <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
-          Stop hunting for lunch deals.
-          <br />
-          <span className="text-brand">Get your food week in one place.</span>
-        </h1>
-        <p className="mx-auto max-w-2xl text-lg text-muted">
-          WeekBite collects this week&apos;s lunch menus, grocery offers and fast food deals around the places you actually spend your
-          week, and summarizes them for you.
+    <div className="space-y-8">
+      <section className="space-y-4">
+        <p className="text-sm text-muted">
+          Week {weekNumber(currentWeekKey())} · {dates[0].date} – {dates[6].date}
         </p>
-        <div className="flex justify-center gap-3">
-          <Link href="/signup" className="btn px-6 py-3 text-base">Create free account</Link>
-          <Link href="/login" className="btn-ghost px-6 py-3 text-base">Log in</Link>
-        </div>
+        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
+          This week&apos;s food deals near the places <span className="text-brand">you actually spend your week</span>.
+        </h1>
+        <p className="max-w-3xl text-muted">
+          WeekBite collects lunch menus, grocery deals and fast food offers around a place and sums up the week. Look around a
+          demo area below or try any address, no account needed.{" "}
+          {user ? (
+            <Link href="/dashboard" className="underline">Go to your own places →</Link>
+          ) : (
+            <>
+              <Link href="/signup" className="underline">Create a free account</Link> to save your office, home and gym with the
+              days you&apos;re there.
+            </>
+          )}
+        </p>
+        <ExploreForm section={section} />
       </section>
-      <section className="grid gap-4 sm:grid-cols-3">
-        {steps.map((s) => (
-          <div key={s.title} className="card p-6 space-y-2">
-            <div className="text-3xl">{s.icon}</div>
-            <h2 className="font-semibold">{s.title}</h2>
-            <p className="text-sm text-muted">{s.text}</p>
-          </div>
-        ))}
-      </section>
+
+      <WeekView
+        location={location}
+        section={section}
+        chips={chips}
+        activeKey={location.slug!}
+        href={(p) => `/?place=${p.key ?? location.slug}&section=${p.section ?? section}`}
+      />
     </div>
   );
 }

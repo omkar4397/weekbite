@@ -41,6 +41,8 @@ export const locations = pgTable(
     discoveredAt: timestamp("discovered_at", { withTimezone: true }),
     /** Why the last discovery was incomplete (null when every lookup worked). */
     discoveryError: text("discovery_error"),
+    /** Public places (demo areas and guest searches) are opened by slug, without an account. */
+    slug: text("slug").unique(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("locations_user_idx").on(t.userId)],

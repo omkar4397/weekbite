@@ -8,8 +8,7 @@ import { getDb, schema } from "@/db";
 import { requireUser } from "@/lib/auth";
 import { geocode } from "@/lib/geo";
 import { discoverForLocation } from "@/services/discovery";
-import { refreshSources } from "@/services/refresh";
-import { buildDigests } from "@/services/digest";
+import { scrapeAndDigest } from "@/services/pipeline";
 
 export type LocationFormState = { error?: string; ok?: string } | undefined;
 
@@ -21,17 +20,6 @@ const LocationSchema = z.object({
   radiusM: z.coerce.number().int().min(200).max(3000),
   days: z.array(z.coerce.number().int().min(1).max(7)).min(1, "Pick at least one day"),
 });
-
-/** Scrape everything linked to these locations, then rebuild their digests. */
-async function scrapeAndDigest(locationIds: number[], forceDigest = false) {
-  const db = await getDb();
-  const links = await db
-    .select({ sourceId: schema.locationSources.sourceId })
-    .from(schema.locationSources)
-    .where(inArray(schema.locationSources.locationId, locationIds));
-  await refreshSources({ sourceIds: links.map((l) => l.sourceId), limit: 100, budgetMs: 200_000 });
-  await buildDigests(locationIds, 60_000, forceDigest);
-}
 
 export async function addLocation(_: LocationFormState, formData: FormData): Promise<LocationFormState> {
   const user = await requireUser();

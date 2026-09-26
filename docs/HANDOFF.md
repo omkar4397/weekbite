@@ -44,10 +44,10 @@ Owner: Omkar (GitHub `omkar4397`). Repo: https://github.com/omkar4397/weekbite
 ```
 src/
   app/
-    page.tsx                 landing page
     login/, signup/          auth pages (components/AuthForm.tsx, actions/auth.ts)
     locations/page.tsx       manage locations (label, address, weekdays, radius)
-    dashboard/page.tsx       weekly view: section tabs (?section=lunch|grocery), location chips (?loc=id)
+    page.tsx                 public start page: demo areas + address search, no login (see below)
+    dashboard/page.tsx       signed-in weekly view: section tabs (?section=...), location chips (?loc=id)
     actions/locations.ts     addLocation / updateLocationDays / deleteLocation / refreshMyOffers (uses after())
     api/cron/refresh/route.ts  daily cron (Bearer CRON_SECRET): rediscover → scrape → digests
   scrapers/
@@ -114,6 +114,16 @@ vercel.json                  cron "0 4 * * *" → /api/cron/refresh (Hobby plan 
 - McDonald's returns HTTP 403 to our scraper (deliberate). Don't disguise the scraper to get around blocks.
 - Chain branches are excluded from the lunch scrape. Chain deal URLs other than McDonald's winnin-deals are found by following
   "erbjudanden/kampanj/deals" links on the homepage. **Not yet verified against the live sites**: run `npm run try-scrapers -- --chains`.
+
+### Public start page (no account)
+- Competition rule: the start page must work without login. `/` shows the week for public places:
+  demo areas `kista` and `lindholmen` (`FEATURED` in `src/lib/guest.ts`) and any address a visitor searches.
+- Public places are `locations` with a `slug`, owned by the `guest@weekbite.invalid` user (password hash `!`,
+  so nobody can log in as it). URL: `/?place=<slug>&section=lunch|grocery|fastfood`.
+- Guest searches: reuse a guest place within 300 m, max 20 new per hour, oldest removed beyond 100.
+- A place without `discovered_at` is discovered and scraped in `after()` on its first visit.
+- Vercel Deployment Protection is "Standard" (production domain public, previews need Vercel login).
+- `src/components/WeekView.tsx` renders one location's week for both `/` and `/dashboard`.
 
 ## 6. Known issues / limitations
 

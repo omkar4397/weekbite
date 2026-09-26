@@ -9,7 +9,7 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "WeekBite — weekly food offers near you",
-  description: "Lunch menus and grocery deals around the places you spend your week, summarized every week.",
+  description: "Lunch menus, grocery deals and fast food offers around the places you spend your week, summarized every week. No account needed to look around.",
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
